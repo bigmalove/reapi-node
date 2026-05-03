@@ -43,7 +43,7 @@ The proxy:
 - Returns `503` if the segment's env vars are missing.
 
 ## Environment Variables
-通过 replit AI Integrations 来调用！
+通过 replit AI Integrations 来调用四个接口！
 Replit AI Integrations (auto-provisioned per provider in use):
 
 - `AI_INTEGRATIONS_OPENAI_BASE_URL` + `AI_INTEGRATIONS_OPENAI_API_KEY`
