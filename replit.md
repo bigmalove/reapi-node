@@ -12,6 +12,17 @@ Two artifacts in a pnpm monorepo:
 
 - **`artifacts/api-server`** — Express + TypeScript proxy (serves at `/api` and `/modelfarm`)
 - **`artifacts/api-portal`** — React + Vite status portal (serves at `/`)
+前端 api-portal（React + Vite + Tailwind）
+技术栈：React 19 + Vite 7 + TypeScript + Tailwind CSS v4（深色主题）
+
+核心文件：
+
+src/App.tsx — 顶层布局：标题栏 + 标签栏（节点状态/接入文档）+ 内容区，用 useState 切换两个页面，没有用任何路由库
+src/pages/ConfigPage.tsx — 节点状态页，挂载时通过 fetch('/api/setup-status') 拉取节点配置状态并渲染卡片
+src/pages/DocsPage.tsx — 接入文档页，纯静态内容（教程步骤 + 调用示例 + 接口表格）
+src/lib/api.ts — 简单的 fetch 封装，定义了 SetupStatus / SegmentStatus 类型
+src/index.css — Tailwind 主题变量（HSL 深色配色）
+没有用：React Query、React Router、状态管理库 — 因为页面只有一个简单的 GET 请求和两个 tab 切换，原生 useState + useEffect 足够了。
 
 ## Stack
 
