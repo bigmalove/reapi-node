@@ -46,10 +46,39 @@ The proxy:
 通过 replit AI Integrations 来调用四个接口！通过 Replit AI Integrations 自动代理，无需提供自己的 API Key
 Replit AI Integrations (auto-provisioned per provider in use):
 
-- `AI_INTEGRATIONS_OPENAI_BASE_URL` + `AI_INTEGRATIONS_OPENAI_API_KEY`
-- `AI_INTEGRATIONS_ANTHROPIC_BASE_URL` + `AI_INTEGRATIONS_ANTHROPIC_API_KEY`
-- `AI_INTEGRATIONS_GEMINI_BASE_URL` + `AI_INTEGRATIONS_GEMINI_API_KEY`
-- `AI_INTEGRATIONS_OPENROUTER_BASE_URL` + `AI_INTEGRATIONS_OPENROUTER_API_KEY`
+通过 Replit AI Integrations 配置四个 AI 通道
+前提：无需自备任何 API Key，费用从 Replit Credits 扣除。
+
+
+
+把以下指令原样发给 Agent
+通过 Replit AI Integrations 依次配置以下四个通道的环境变量：
+1. OpenAI     — AI_INTEGRATIONS_OPENAI_BASE_URL / AI_INTEGRATIONS_OPENAI_API_KEY
+2. Anthropic  — AI_INTEGRATIONS_ANTHROPIC_BASE_URL / AI_INTEGRATIONS_ANTHROPIC_API_KEY
+3. Gemini     — AI_INTEGRATIONS_GEMINI_BASE_URL / AI_INTEGRATIONS_GEMINI_API_KEY
+4. OpenRouter — AI_INTEGRATIONS_OPENROUTER_BASE_URL / AI_INTEGRATIONS_OPENROUTER_API_KEY
+
+Agent 会自动调用 setupReplitAIIntegrations 完成配置，每个通道返回 "success": true 即成功。
+
+重启 API Server
+配置完成后，在工作流面板中重启 API Server，让新的环境变量生效。
+
+验证
+切换到门户的节点状态页，四个通道应全部显示 可用。
+
+或用 curl 直接验证：
+
+curl https://<你的域名>/api/setup-status
+
+返回结果中每个通道的 "configured": true 即表示配置成功。
+
+四个通道环境变量速查
+通道	Base URL 变量	API Key 变量
+OpenAI	AI_INTEGRATIONS_OPENAI_BASE_URL	AI_INTEGRATIONS_OPENAI_API_KEY
+Anthropic	AI_INTEGRATIONS_ANTHROPIC_BASE_URL	AI_INTEGRATIONS_ANTHROPIC_API_KEY
+Google Gemini	AI_INTEGRATIONS_GEMINI_BASE_URL	AI_INTEGRATIONS_GEMINI_API_KEY
+OpenRouter	AI_INTEGRATIONS_OPENROUTER_BASE_URL	AI_INTEGRATIONS_OPENROUTER_API_KEY
+以上变量由 Replit 自动注入，请勿手动修改。其中 API Key 是占位字符串，代理会在转发时自动替换为真实密钥。
 
 Optional:
 
