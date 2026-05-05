@@ -1,7 +1,5 @@
-
-
-
-通过 Replit AI Integrations 配置四个 AI 通道
+先运行setup.sh
+然后通过 Replit AI Integrations 配置四个 AI 通道
 前提：无需自备任何 API Key，费用从 Replit Credits 扣除。
 通过 Replit AI Integrations 依次配置以下四个通道的环境变量：
 1. OpenAI     — AI_INTEGRATIONS_OPENAI_BASE_URL / AI_INTEGRATIONS_OPENAI_API_KEY
