@@ -118,13 +118,19 @@ router.use(async (req: Request, res: Response) => {
   res.setTimeout(600_000);
   req.socket.setTimeout(600_000);
 
-  let body: Buffer | undefined;
+  let body: Uint8Array | undefined;
   if (req.method !== "GET" && req.method !== "HEAD") {
     if (Buffer.isBuffer(req.body)) {
-      body = req.body;
+      // Hand undici a fresh Uint8Array view that doesn't share Buffer's
+      // pooled backing store. Some undici versions hang when given the
+      // raw Express `req.body` Buffer directly.
+      body = new Uint8Array(req.body);
     } else if (typeof req.body === "string") {
-      body = Buffer.from(req.body, "utf-8");
+      body = new Uint8Array(Buffer.from(req.body, "utf-8"));
     }
+  }
+  if (body) {
+    headers["Content-Length"] = String(body.byteLength);
   }
 
   // Cancel the upstream request as soon as the client disconnects so we
@@ -139,6 +145,17 @@ router.use(async (req: Request, res: Response) => {
   };
   req.on("close", onClientClose);
   res.on("close", onClientClose);
+
+  req.log.info(
+    {
+      segment,
+      targetUrl,
+      method: req.method,
+      bodyLen: body?.length ?? 0,
+      hdrs: Object.keys(headers),
+    },
+    "modelfarm proxy -> upstream",
+  );
 
   let upstream: globalThis.Response;
   try {
