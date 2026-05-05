@@ -66,6 +66,10 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    // 开发环境必须把跨服务前缀代理到 API Server (8080)。
+    // 否则 Vite 会按 SPA 默认行为返回 index.html，前端 res.json() 会抛
+    // "Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON"。
+    // 新增任何由 API Server 处理的前缀（例如 /api、/modelfarm）时，都要在这里同步加上。
     proxy: {
       "/api": "http://localhost:8080",
       "/modelfarm": "http://localhost:8080",
