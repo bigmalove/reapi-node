@@ -26,6 +26,18 @@ if (!basePath) {
   );
 }
 
+// API Server 监听端口；门户的 /api、/modelfarm 请求会被代理到这里。
+// 默认 8080，与 artifacts/api-server/.replit-artifact/artifact.toml 保持一致。
+const apiServerPort = Number(process.env.API_SERVER_PORT ?? "8080");
+
+if (Number.isNaN(apiServerPort) || apiServerPort <= 0) {
+  throw new Error(
+    `Invalid API_SERVER_PORT value: "${process.env.API_SERVER_PORT}"`,
+  );
+}
+
+const apiServerTarget = `http://localhost:${apiServerPort}`;
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -66,13 +78,13 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
-    // 开发环境必须把跨服务前缀代理到 API Server (8080)。
+    // 开发环境必须把跨服务前缀代理到 API Server。
     // 否则 Vite 会按 SPA 默认行为返回 index.html，前端 res.json() 会抛
     // "Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON"。
     // 新增任何由 API Server 处理的前缀（例如 /api、/modelfarm）时，都要在这里同步加上。
     proxy: {
-      "/api": "http://localhost:8080",
-      "/modelfarm": "http://localhost:8080",
+      "/api": apiServerTarget,
+      "/modelfarm": apiServerTarget,
     },
   },
   preview: {
