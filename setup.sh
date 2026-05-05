@@ -16,7 +16,8 @@ cat <<'EOF'
    - gemini     -> AI_INTEGRATIONS_GEMINI_BASE_URL / AI_INTEGRATIONS_GEMINI_API_KEY
    - openrouter -> AI_INTEGRATIONS_OPENROUTER_BASE_URL / AI_INTEGRATIONS_OPENROUTER_API_KEY
 
-2) 重启 API Server 工作流以加载新环境变量。
+2) 在 Replit 工作流面板中重启 "artifacts/api-server: API Server" 工作流以加载新环境变量。
+   （该工作流由 artifacts/api-server/.replit-artifact/artifact.toml 自动注册）
 
 3) 验证：
    curl -fsS http://localhost:8080/api/setup-status

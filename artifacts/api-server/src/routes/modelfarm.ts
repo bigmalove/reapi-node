@@ -127,21 +127,40 @@ router.use(async (req: Request, res: Response) => {
     }
   }
 
+  // Cancel the upstream request as soon as the client disconnects so we
+  // don't keep streaming (and burning credits) into a closed socket.
+  const abortController = new AbortController();
+  let clientAborted = false;
+  const onClientClose = () => {
+    if (!res.writableEnded) {
+      clientAborted = true;
+      abortController.abort();
+    }
+  };
+  req.on("close", onClientClose);
+  res.on("close", onClientClose);
+
   let upstream: globalThis.Response;
   try {
     upstream = await fetch(targetUrl, {
       method: req.method,
       headers,
       body,
+      signal: abortController.signal,
     });
   } catch (err) {
+    req.off("close", onClientClose);
+    res.off("close", onClientClose);
+    if (clientAborted) return;
     req.log.error({ err, segment, targetUrl }, "Upstream fetch failed");
-    res.status(502).json({
-      error: {
-        message: err instanceof Error ? err.message : "Upstream fetch failed",
-        type: "upstream_error",
-      },
-    });
+    if (!res.headersSent) {
+      res.status(502).json({
+        error: {
+          message: err instanceof Error ? err.message : "Upstream fetch failed",
+          type: "upstream_error",
+        },
+      });
+    }
     return;
   }
 
@@ -152,6 +171,8 @@ router.use(async (req: Request, res: Response) => {
   if (cacheCtrl) res.setHeader("Cache-Control", cacheCtrl);
 
   if (!upstream.body) {
+    req.off("close", onClientClose);
+    res.off("close", onClientClose);
     res.end();
     return;
   }
@@ -160,16 +181,36 @@ router.use(async (req: Request, res: Response) => {
   res.flushHeaders?.();
   try {
     while (true) {
+      if (clientAborted) break;
       const { done, value } = await reader.read();
       if (done) break;
       if (value && !res.write(Buffer.from(value))) {
-        await new Promise<void>((resolve) => res.once("drain", () => resolve()));
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            res.off("drain", done);
+            res.off("close", done);
+            res.off("error", done);
+            resolve();
+          };
+          res.once("drain", done);
+          res.once("close", done);
+          res.once("error", done);
+        });
       }
     }
   } catch (err) {
-    req.log.error({ err, segment }, "Upstream stream error");
+    if (!clientAborted) {
+      req.log.error({ err, segment }, "Upstream stream error");
+    }
   } finally {
-    res.end();
+    req.off("close", onClientClose);
+    res.off("close", onClientClose);
+    try {
+      await reader.cancel();
+    } catch {
+      // ignore
+    }
+    if (!res.writableEnded) res.end();
   }
 });
 

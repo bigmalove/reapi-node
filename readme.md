@@ -35,7 +35,7 @@ bash setup.sh
 
 ## 3. 重启 API Server
 
-在工作流面板中重启 `API Server`，让新环境变量生效。
+在 Replit 工作流面板（Workflows）中重启名为 `artifacts/api-server: API Server` 的工作流，让新环境变量生效。该工作流由 `artifacts/api-server/.replit-artifact/artifact.toml` 自动注册，命令为 `pnpm --filter @workspace/api-server run dev`。
 
 ## 4. 验证
 
