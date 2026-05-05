@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import apiRouter from "./routes/index.js";
 import modelfarmRouter from "./routes/modelfarm.js";
 import { logger } from "./lib/logger.js";
+import { INDEX_HTML } from "./lib/index-html.js";
 
 const app: Express = express();
 
@@ -47,5 +48,10 @@ app.get("/healthz", (_req, res) => {
 });
 
 app.use("/api", apiRouter);
+
+// Static landing page (single-file HTML with vanilla JS that calls /api/setup-status).
+app.get("/", (_req, res) => {
+  res.type("html").send(INDEX_HTML);
+});
 
 export default app;

@@ -2,21 +2,17 @@
 
 本节点是反向代理池中的一个上游成员，对外暴露 `/modelfarm/{openai,anthropic,google,openrouter}`，将请求透传到本机配置的 Replit AI 集成。
 
-## 0. 环境前置约束（必读）
+## 架构
 
-开发环境下，门户和 API Server 是两个独立端口的服务：
+整个项目只有一个服务：
 
-| 服务               | 端口  | 框架          |
-| ------------------ | ----- | ------------- |
-| AI Gateway Portal  | 24927 | Vite          |
-| API Server         | 8080  | Express       |
+| 服务       | 端口 | 框架    | 路径                                              |
+| ---------- | ---- | ------- | ------------------------------------------------- |
+| API Server | 8080 | Express | `/`（HTML 页面）、`/api/*`、`/modelfarm/*`        |
 
-门户用相对路径 `/api/*`、`/modelfarm/*` 调后端，**必须经过 Vite 的 `server.proxy` 转发到 8080**，否则 Vite 会按 SPA 默认行为返回 `index.html`，前端 `res.json()` 会抛出
-`Unexpected token '<', "<!DOCTYPE "... is not valid JSON`。
-
-代理配置见 `artifacts/api-portal/vite.config.ts` 的 `server.proxy`。新增任何跨服务路径前缀时，记得同步加进去。`setup.sh` 已内置自检，缺失会报错。
-
-生产环境由 Replit 路径路由统一处理（`/` → 门户静态文件；`/api`、`/modelfarm` → API Server），无需额外配置。
+- `GET /` — 节点状态与接入文档（单文件 HTML，原生 JS 调 `/api/setup-status`）
+- `GET /api/healthz` · `GET /api/setup-status` — 管理接口
+- `ANY /modelfarm/<segment>/*` — 透传到对应上游
 
 ## 1. 运行 setup
 
@@ -24,7 +20,7 @@
 bash setup.sh
 ```
 
-完成依赖安装、类型检查与开发环境代理自检。
+完成依赖安装与类型检查。
 
 ## 2. 配置四个 AI 通道
 
@@ -43,17 +39,20 @@ bash setup.sh
 
 ## 4. 验证
 
-切到门户的「节点状态」页，四个通道应全部显示「可用」。
-
-也可用 curl 直接验证：
-
 ```bash
-# 开发环境（经 Vite 代理）
-curl -fsS http://localhost:24927/api/setup-status
-
-# 线上域名（经 Replit 路径路由）
+curl -fsS http://localhost:8080/api/setup-status
+# 或线上：
 curl -fsS https://<你的域名>/api/setup-status
 ```
 
-返回 JSON 中每个通道的 `"configured": true` 即表示配置成功。
-若返回的是 HTML，说明 Vite 代理或线上路由有问题，回到第 0 节排查。
+返回 JSON 中每个通道的 `"configured": true` 即表示配置成功。也可用浏览器打开 `http://localhost:8080/` 查看「节点状态」页，四个通道应全部显示「可用」。
+
+## 构建与部署
+
+```bash
+pnpm install
+pnpm run build                                  # typecheck + 构建 api-server
+pnpm --filter @workspace/api-server run dev     # 开发模式启动
+```
+
+部署使用 Replit Deployments（autoscale），构建/启动命令在 `artifacts/api-server/.replit-artifact/artifact.toml` 中定义。
