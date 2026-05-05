@@ -66,6 +66,10 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    proxy: {
+      "/api": "http://localhost:8080",
+      "/modelfarm": "http://localhost:8080",
+    },
   },
   preview: {
     port,
