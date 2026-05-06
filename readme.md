@@ -1,58 +1,191 @@
-# AI Gateway 上游节点
+这是一个 Replit AI 上游代理节点。
 
-本节点是反向代理池中的一个上游成员，对外暴露 `/modelfarm/{openai,anthropic,google,openrouter}`，将请求透传到本机配置的 Replit AI 集成。
+你只需要记住 3 件事：
 
-## 架构
+```txt
+只用 pnpm
+只启动 API Server
+只看 8080 端口
+```
 
-整个项目只有一个服务：
+## 1. 这个项目是什么
 
-| 服务       | 端口 | 框架    | 路径                                              |
-| ---------- | ---- | ------- | ------------------------------------------------- |
-| API Server | 8080 | Express | `/`（HTML 页面）、`/api/*`、`/modelfarm/*`        |
+它把请求转发到 Replit AI Integrations。
 
-- `GET /` — 节点状态与接入文档（单文件 HTML，原生 JS 调 `/api/setup-status`）
-- `GET /api/healthz` · `GET /api/setup-status` — 管理接口
-- `ANY /modelfarm/<segment>/*` — 透传到对应上游
+支持 4 个通道：
 
-## 1. 运行 setup
+```txt
+/modelfarm/openai/*
+/modelfarm/anthropic/*
+/modelfarm/google/*
+/modelfarm/openrouter/*
+```
+
+不要自己申请 API Key。
+费用走 Replit Credits。
+
+## 2. 先安装
+
+在项目根目录执行：
 
 ```bash
+corepack enable
 bash setup.sh
 ```
 
-完成依赖安装与类型检查。
+`setup.sh` 会自动做：
 
-## 2. 配置四个 AI 通道
+```txt
+pnpm install
+pnpm run typecheck
+```
 
-无需自备任何 API Key，费用从 Replit Credits 扣除。Agent 会自动调用 `setupReplitAIIntegrations` 依次配置以下四个通道：
+看到脚本没有报错，再继续。
 
-1. OpenAI     — `AI_INTEGRATIONS_OPENAI_BASE_URL` / `AI_INTEGRATIONS_OPENAI_API_KEY`
-2. Anthropic  — `AI_INTEGRATIONS_ANTHROPIC_BASE_URL` / `AI_INTEGRATIONS_ANTHROPIC_API_KEY`
-3. Gemini     — `AI_INTEGRATIONS_GEMINI_BASE_URL` / `AI_INTEGRATIONS_GEMINI_API_KEY`
-4. OpenRouter — `AI_INTEGRATIONS_OPENROUTER_BASE_URL` / `AI_INTEGRATIONS_OPENROUTER_API_KEY`
+## 3. 配置 Replit AI
 
-每个通道返回 `"success": true` 即配置完成。
+让 Replit Agent 调用：
 
-## 3. 重启 API Server
+```txt
+setupReplitAIIntegrations
+```
 
-在 Replit 工作流面板（Workflows）中重启名为 `artifacts/api-server: API Server` 的工作流，让新环境变量生效。该工作流由 `artifacts/api-server/.replit-artifact/artifact.toml` 自动注册，命令为 `pnpm --filter @workspace/api-server run dev`。
+必须配置 4 个：
 
-## 4. 验证
+```txt
+openai
+anthropic
+gemini
+openrouter
+```
+
+每个都要返回：
+
+```txt
+success: true
+```
+
+不要漏掉任何一个。
+
+## 4. 重启后端
+
+在 Replit Workflows 里重启这个工作流：
+
+```txt
+artifacts/api-server: API Server
+```
+
+重启是必须的。
+因为环境变量配置后，后端要重启才能读到。
+
+## 5. 验证是否成功
+
+执行：
 
 ```bash
 curl -fsS http://localhost:8080/api/setup-status
-# 或线上：
-curl -fsS https://<你的域名>/api/setup-status
 ```
 
-返回 JSON 中每个通道的 `"configured": true` 即表示配置成功。也可用浏览器打开 `http://localhost:8080/` 查看「节点状态」页，四个通道应全部显示「可用」。
+成功时应该返回 JSON。
 
-## 构建与部署
+重点看 4 个通道都必须是：
+
+```txt
+configured: true
+```
+
+也可以打开：
+
+```txt
+http://localhost:8080/
+```
+
+页面里 4 个通道都应该显示可用。
+
+## 6. 构建命令
+
+```bash
+pnpm run build
+```
+
+这个命令只做两件事：
+
+```txt
+检查 API Server 类型
+构建 API Server
+```
+
+没有前端构建。
+没有 Vite。
+没有 24927 端口。
+
+## 7. 本地启动命令
+
+```bash
+PORT=8080 pnpm --filter @workspace/api-server run dev
+```
+
+启动后访问：
+
+```txt
+http://localhost:8080/
+```
+
+## 8. 常见错误
+
+### 错误 1：用了 npm
+
+不要用：
+
+```bash
+npm install
+```
+
+正确做法：
 
 ```bash
 pnpm install
-pnpm run build                                  # typecheck + 构建 api-server
-pnpm --filter @workspace/api-server run dev     # 开发模式启动
 ```
 
-部署使用 Replit Deployments（autoscale），构建/启动命令在 `artifacts/api-server/.replit-artifact/artifact.toml` 中定义。
+### 错误 2：`configured: false`
+
+原因只有两个：
+
+```txt
+Replit AI 没配置好
+配置后没有重启 API Server
+```
+
+重新做第 3 步和第 4 步。
+
+### 错误 3：打开了错误端口
+
+不要看 24927。
+不要找 Vite。
+
+只看：
+
+```txt
+8080
+```
+
+## 9. AI 执行清单
+
+按顺序做，不要跳步：
+
+```txt
+[ ] 进入项目根目录
+[ ] corepack enable
+[ ] bash setup.sh
+[ ] 调用 setupReplitAIIntegrations
+[ ] openai 返回 success: true
+[ ] anthropic 返回 success: true
+[ ] gemini 返回 success: true
+[ ] openrouter 返回 success: true
+[ ] 重启 artifacts/api-server: API Server
+[ ] curl http://localhost:8080/api/setup-status
+[ ] 确认 4 个 configured 都是 true
+[ ] 打开 http://localhost:8080/
+```
+
+做完上面这些，项目就搭好了。
