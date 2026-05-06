@@ -1,30 +1,95 @@
-这是一个 Replit AI 上游代理节点。
+# ReAPI Node：傻瓜搭建说明
 
-你只需要记住 3 件事：
+你现在的任务是：**搭建项目**。
 
-```txt
-只用 pnpm
-只启动 API Server
-只看 8080 端口
-```
+你不是来修代码的。
+你不是来补接口的。
+你不是来改 OpenAPI 的。
+你不是来生成类型的。
 
-## 1. 这个项目是什么
+## 0. 绝对禁止
 
-它把请求转发到 Replit AI Integrations。
-
-支持 4 个通道：
+如果你是 AI，请先读这里。
 
 ```txt
-/modelfarm/openai/*
-/modelfarm/anthropic/*
-/modelfarm/google/*
-/modelfarm/openrouter/*
+禁止修改任何代码文件
+禁止新建接口
+禁止编辑 openapi.yaml
+禁止运行代码生成
+禁止解压旧压缩包来覆盖项目
+禁止寻找 Vite 前端
+禁止使用 24927 端口
+禁止使用 npm install
 ```
 
-不要自己申请 API Key。
-费用走 Replit Credits。
+本项目已经有这些东西，不需要你补：
 
-## 2. 先安装
+```txt
+/api/setup-status 已存在
+/ 首页已存在
+/modelfarm/* 代理已存在
+```
+
+如果你觉得缺接口，说明你在看旧代码或跑错服务。
+正确做法不是改代码，而是重新拉最新代码。
+
+## 1. 先确认你拿到的是最新项目
+
+项目根目录应该有这些文件：
+
+```txt
+package.json
+setup.sh
+artifacts/api-server/package.json
+artifacts/api-server/src/routes/setup.ts
+artifacts/api-server/src/lib/index-html.ts
+```
+
+项目里不应该需要这些东西：
+
+```txt
+artifacts/api-portal
+artifacts/mockup-sandbox
+lib/api-spec
+lib/api-zod
+lib/api-client-react
+openapi.yaml
+```
+
+如果你看到上面这些旧目录，不要改它们。
+直接重新拉最新仓库：
+
+```bash
+git clone https://github.com/bigmalove/reapi-node.git
+cd reapi-node
+```
+
+如果已经在仓库里，执行：
+
+```bash
+git pull
+```
+
+## 2. 记住唯一服务
+
+本项目只有一个服务：
+
+```txt
+API Server
+端口：8080
+```
+
+访问地址只有这个：
+
+```txt
+http://localhost:8080/
+```
+
+不要找前端服务。
+不要找 Vite。
+不要打开 24927。
+
+## 3. 安装和检查
 
 在项目根目录执行：
 
@@ -33,16 +98,11 @@ corepack enable
 bash setup.sh
 ```
 
-`setup.sh` 会自动做：
+脚本成功就继续。
+脚本失败就看报错。
+不要自己改业务代码。
 
-```txt
-pnpm install
-pnpm run typecheck
-```
-
-看到脚本没有报错，再继续。
-
-## 3. 配置 Replit AI
+## 4. 配置 Replit AI
 
 让 Replit Agent 调用：
 
@@ -50,7 +110,7 @@ pnpm run typecheck
 setupReplitAIIntegrations
 ```
 
-必须配置 4 个：
+必须配置 4 个通道：
 
 ```txt
 openai
@@ -59,26 +119,28 @@ gemini
 openrouter
 ```
 
-每个都要返回：
+每个都必须返回：
 
 ```txt
 success: true
 ```
 
-不要漏掉任何一个。
+不要只配一个。
+不要跳过任何一个。
+不要手写假的环境变量。
 
-## 4. 重启后端
+## 5. 重启 API Server
 
-在 Replit Workflows 里重启这个工作流：
+配置完成后，重启 Replit 工作流：
 
 ```txt
 artifacts/api-server: API Server
 ```
 
-重启是必须的。
-因为环境变量配置后，后端要重启才能读到。
+必须重启。
+不重启就读不到新环境变量。
 
-## 5. 验证是否成功
+## 6. 验证状态接口
 
 执行：
 
@@ -86,106 +148,95 @@ artifacts/api-server: API Server
 curl -fsS http://localhost:8080/api/setup-status
 ```
 
-成功时应该返回 JSON。
+正确结果是 JSON。
 
-重点看 4 个通道都必须是：
+JSON 里 4 个通道都要是：
 
 ```txt
 configured: true
 ```
 
-也可以打开：
+如果是 `configured: false`，只做两件事：
+
+```txt
+重新配置 Replit AI
+重启 API Server
+```
+
+不要改代码。
+
+## 7. 验证首页
+
+打开：
 
 ```txt
 http://localhost:8080/
 ```
 
-页面里 4 个通道都应该显示可用。
+如果首页 404，不要补根路由。
 
-## 6. 构建命令
+正确处理顺序：
+
+```txt
+1. 确认运行的是 API Server
+2. 确认端口是 8080
+3. 执行 git pull
+4. 执行 pnpm run build
+5. 重启 artifacts/api-server: API Server
+```
+
+仍然 404，再检查是否在旧项目里。
+不要编辑 `routes/index.ts`。
+
+## 8. 构建命令
 
 ```bash
 pnpm run build
 ```
 
-这个命令只做两件事：
-
-```txt
-检查 API Server 类型
-构建 API Server
-```
+它只构建 API Server。
 
 没有前端构建。
-没有 Vite。
-没有 24927 端口。
+没有 Vite 构建。
+没有 OpenAPI 代码生成。
 
-## 7. 本地启动命令
+## 9. 本地启动命令
+
+如果不用 Replit Workflows，本地可以执行：
 
 ```bash
 PORT=8080 pnpm --filter @workspace/api-server run dev
 ```
 
-启动后访问：
+然后打开：
 
 ```txt
 http://localhost:8080/
 ```
 
-## 8. 常见错误
+## 10. 最终检查清单
 
-### 错误 1：用了 npm
-
-不要用：
-
-```bash
-npm install
-```
-
-正确做法：
-
-```bash
-pnpm install
-```
-
-### 错误 2：`configured: false`
-
-原因只有两个：
+只按这个清单做。
+不要增加额外步骤。
 
 ```txt
-Replit AI 没配置好
-配置后没有重启 API Server
-```
-
-重新做第 3 步和第 4 步。
-
-### 错误 3：打开了错误端口
-
-不要看 24927。
-不要找 Vite。
-
-只看：
-
-```txt
-8080
-```
-
-## 9. AI 执行清单
-
-按顺序做，不要跳步：
-
-```txt
-[ ] 进入项目根目录
+[ ] 确认项目是最新 reapi-node
+[ ] 不修改任何代码文件
 [ ] corepack enable
 [ ] bash setup.sh
 [ ] 调用 setupReplitAIIntegrations
-[ ] openai 返回 success: true
-[ ] anthropic 返回 success: true
-[ ] gemini 返回 success: true
-[ ] openrouter 返回 success: true
+[ ] openai success: true
+[ ] anthropic success: true
+[ ] gemini success: true
+[ ] openrouter success: true
 [ ] 重启 artifacts/api-server: API Server
 [ ] curl http://localhost:8080/api/setup-status
-[ ] 确认 4 个 configured 都是 true
+[ ] 看到 4 个 configured: true
 [ ] 打开 http://localhost:8080/
 ```
 
-做完上面这些，项目就搭好了。
+## 11. 一句话版本
+
+```txt
+拉最新代码，用 pnpm，运行 bash setup.sh，配置 4 个 Replit AI 通道，重启 API Server，看 8080，验证 /api/setup-status，不要改代码。
+```
