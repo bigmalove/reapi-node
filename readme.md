@@ -178,6 +178,7 @@ http://localhost:8080/
 [ ] curl http://localhost:8080/api/setup-status
 [ ] 看到 4 个 configured: true
 [ ] 打开 http://localhost:8080/
+[ ] 输出html页面访问地址
 ```
 
 ## 11. 一句话版本
