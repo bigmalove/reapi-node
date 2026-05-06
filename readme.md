@@ -38,19 +38,42 @@ bash setup.sh
 
 ## 4. 配置 Replit AI
 
-通过 Replit AI 集成系统来配置这 4 个通道
-```
-openai
-anthropic
-gemini
-openrouter
-```
+Replit AI Integrations 配置过程
 
-每个都必须返回：
+在 code_execution JS 沙箱中，依次调用 setupReplitAIIntegrations()，每次等上一个完成再调下一个：
 
-```txt
-success: true
-```
+// 1. OpenAI
+const r1 = await setupReplitAIIntegrations({
+  providerSlug: "openai",
+  providerUrlEnvVarName: "AI_INTEGRATIONS_OPENAI_BASE_URL",
+  providerApiKeyEnvVarName: "AI_INTEGRATIONS_OPENAI_API_KEY",
+});
+// 返回：{ success: true, envVarsSet: ["AI_INTEGRATIONS_OPENAI_BASE_URL", "AI_INTEGRATIONS_OPENAI_API_KEY"] }
+// 2. Anthropic
+const r2 = await setupReplitAIIntegrations({
+  providerSlug: "anthropic",
+  providerUrlEnvVarName: "AI_INTEGRATIONS_ANTHROPIC_BASE_URL",
+  providerApiKeyEnvVarName: "AI_INTEGRATIONS_ANTHROPIC_API_KEY",
+});
+// 返回：{ success: true, envVarsSet: [...] }
+// 3. Gemini
+const r3 = await setupReplitAIIntegrations({
+  providerSlug: "gemini",
+  providerUrlEnvVarName: "AI_INTEGRATIONS_GEMINI_BASE_URL",
+  providerApiKeyEnvVarName: "AI_INTEGRATIONS_GEMINI_API_KEY",
+});
+// 返回：{ success: true, envVarsSet: [...] }
+// 4. OpenRouter
+const r4 = await setupReplitAIIntegrations({
+  providerSlug: "openrouter",
+  providerUrlEnvVarName: "AI_INTEGRATIONS_OPENROUTER_BASE_URL",
+  providerApiKeyEnvVarName: "AI_INTEGRATIONS_OPENROUTER_API_KEY",
+});
+// 返回：{ success: true, envVarsSet: [...] }
+
+配置完成后重启 API Server 工作流，再验证：
+
+curl http://localhost:8080/api/setup-status
 
 
 
