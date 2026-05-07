@@ -7,6 +7,9 @@ interface UpstreamConfig {
   baseUrlEnv: string;
   apiKeyEnv: string;
   authMode: AuthMode;
+  // Lower-cased client header names that should be forwarded verbatim to
+  // the real upstream (in addition to the always-forwarded set below).
+  forwardHeaders: readonly string[];
 }
 
 const UPSTREAM: Record<string, UpstreamConfig> = {
@@ -14,23 +17,58 @@ const UPSTREAM: Record<string, UpstreamConfig> = {
     baseUrlEnv: "AI_INTEGRATIONS_OPENAI_BASE_URL",
     apiKeyEnv: "AI_INTEGRATIONS_OPENAI_API_KEY",
     authMode: "bearer",
+    forwardHeaders: ["openai-beta", "openai-organization", "openai-project"],
   },
   anthropic: {
     baseUrlEnv: "AI_INTEGRATIONS_ANTHROPIC_BASE_URL",
     apiKeyEnv: "AI_INTEGRATIONS_ANTHROPIC_API_KEY",
     authMode: "x-api-key",
+    forwardHeaders: ["anthropic-beta", "anthropic-version"],
   },
   google: {
     baseUrlEnv: "AI_INTEGRATIONS_GEMINI_BASE_URL",
     apiKeyEnv: "AI_INTEGRATIONS_GEMINI_API_KEY",
     authMode: "x-goog-api-key",
+    forwardHeaders: ["x-goog-api-client"],
   },
   openrouter: {
     baseUrlEnv: "AI_INTEGRATIONS_OPENROUTER_BASE_URL",
     apiKeyEnv: "AI_INTEGRATIONS_OPENROUTER_API_KEY",
     authMode: "bearer",
+    forwardHeaders: [
+      "openai-beta",
+      "openai-organization",
+      "openai-project",
+      "http-referer",
+      "x-title",
+    ],
   },
 };
+
+// Headers that must NEVER be passed through to upstream — these are either
+// authentication for our proxy (replaced with the real upstream key below),
+// or hop-by-hop / framing headers that fetch/undici will recompute.
+const STRIP_HEADERS = new Set([
+  "host",
+  "content-length",
+  "connection",
+  "keep-alive",
+  "transfer-encoding",
+  "upgrade",
+  "proxy-connection",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "expect",
+  "authorization",
+  "x-api-key",
+  "x-goog-api-key",
+  "cookie",
+  // Let undici negotiate compression with the upstream itself; it
+  // auto-decodes the response body, so forwarding the client's
+  // accept-encoding would mismatch the bytes we actually re-emit.
+  "accept-encoding",
+]);
 
 export const SEGMENTS = Object.keys(UPSTREAM);
 
@@ -93,26 +131,46 @@ router.use(async (req: Request, res: Response) => {
   const targetUrl = `${baseUrl.replace(/\/+$/, "")}${rest}${qs}`;
 
   const headers: Record<string, string> = {};
-  const incomingCT = req.headers["content-type"];
-  if (typeof incomingCT === "string") headers["Content-Type"] = incomingCT;
-  // Forward Accept only when it isn't the wildcard "*/*" — undici hangs
-  // indefinitely on this Replit container when given Accept: */* against
-  // the local model-farm proxy.
-  const accept = req.headers["accept"];
-  if (typeof accept === "string" && accept !== "*/*") {
-    headers["Accept"] = accept;
+
+  // Pass through every client header except the strip-list and segment
+  // auth headers. This is the "don't drop unknown headers" principle:
+  // upstream-specific betas (anthropic-beta, openai-beta), telemetry
+  // (x-goog-api-client), routing hints (openai-organization,
+  // openai-project), etc. all flow through unchanged. cfg.forwardHeaders
+  // documents the per-upstream headers we explicitly know about.
+  void cfg.forwardHeaders;
+  for (const [name, raw] of Object.entries(req.headers)) {
+    if (raw === undefined) continue;
+    const lower = name.toLowerCase();
+    if (STRIP_HEADERS.has(lower)) continue;
+    // Drop framing / proxy-internal headers we never want to forward.
+    if (lower.startsWith("x-replit-") || lower.startsWith("x-forwarded-")) {
+      continue;
+    }
+    // Skip Accept: */* — undici hangs in this Replit container when
+    // given a wildcard Accept against the local model-farm proxy.
+    if (lower === "accept") {
+      const v = Array.isArray(raw) ? raw[0] : raw;
+      if (typeof v === "string" && v !== "*/*") headers["Accept"] = v;
+      continue;
+    }
+    const value = Array.isArray(raw) ? raw.join(", ") : raw;
+    if (typeof value === "string") headers[name] = value;
   }
 
+  // Inject our real upstream credentials, replacing whatever the client
+  // sent for proxy auth.
   switch (cfg.authMode) {
     case "bearer":
       headers["Authorization"] = `Bearer ${apiKey}`;
       break;
     case "x-api-key": {
       headers["x-api-key"] = apiKey;
-      const av = req.headers["anthropic-version"];
-      headers["anthropic-version"] = typeof av === "string" ? av : "2023-06-01";
-      const beta = req.headers["anthropic-beta"];
-      if (typeof beta === "string") headers["anthropic-beta"] = beta;
+      // Anthropic requires anthropic-version; default if client omitted.
+      const hasVersion = Object.keys(headers).some(
+        (h) => h.toLowerCase() === "anthropic-version",
+      );
+      if (!hasVersion) headers["anthropic-version"] = "2023-06-01";
       break;
     }
     case "x-goog-api-key":
@@ -177,10 +235,47 @@ router.use(async (req: Request, res: Response) => {
   }
 
   res.status(upstream.status);
-  const upCT = upstream.headers.get("content-type");
-  if (upCT) res.setHeader("Content-Type", upCT);
-  const cacheCtrl = upstream.headers.get("cache-control");
-  if (cacheCtrl) res.setHeader("Cache-Control", cacheCtrl);
+
+  // Forward all upstream response headers verbatim so callers see real
+  // error bodies, rate-limit hints, request IDs, etc. Strip the full
+  // RFC 7230 hop-by-hop set plus framing headers that would mismatch
+  // the bytes we actually emit (fetch has already decompressed and
+  // de-chunked the body).
+  const RES_STRIP = new Set([
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+    "content-length",
+    "content-encoding",
+  ]);
+  // Per RFC 7230, the upstream Connection header may name additional
+  // connection-scoped headers that must also be stripped.
+  const upConn = upstream.headers.get("connection");
+  if (upConn) {
+    for (const tok of upConn.split(",")) {
+      const t = tok.trim().toLowerCase();
+      if (t) RES_STRIP.add(t);
+    }
+  }
+  upstream.headers.forEach((value, key) => {
+    if (RES_STRIP.has(key.toLowerCase())) return;
+    res.setHeader(key, value);
+  });
+
+  const isSSE = (upstream.headers.get("content-type") ?? "").includes(
+    "text/event-stream",
+  );
+  if (isSSE) {
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    // Disable Nagle so each SSE chunk flushes immediately.
+    req.socket.setNoDelay(true);
+  }
 
   if (!upstream.body) {
     res.end();
