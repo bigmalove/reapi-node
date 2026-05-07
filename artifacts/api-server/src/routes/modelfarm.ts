@@ -95,8 +95,13 @@ router.use(async (req: Request, res: Response) => {
   const headers: Record<string, string> = {};
   const incomingCT = req.headers["content-type"];
   if (typeof incomingCT === "string") headers["Content-Type"] = incomingCT;
+  // Forward Accept only when it isn't the wildcard "*/*" — undici hangs
+  // indefinitely on this Replit container when given Accept: */* against
+  // the local model-farm proxy.
   const accept = req.headers["accept"];
-  if (typeof accept === "string") headers["Accept"] = accept;
+  if (typeof accept === "string" && accept !== "*/*") {
+    headers["Accept"] = accept;
+  }
 
   switch (cfg.authMode) {
     case "bearer":
@@ -118,33 +123,22 @@ router.use(async (req: Request, res: Response) => {
   res.setTimeout(600_000);
   req.socket.setTimeout(600_000);
 
-  let body: Uint8Array | undefined;
+  // Undici's fetch hangs in this Replit container when given a binary
+  // body sourced from express.raw's pooled Buffer (regardless of whether
+  // it's wrapped as Uint8Array or fresh ArrayBuffer). Passing the body as
+  // a string works reliably. All upstream model APIs are JSON, so this is
+  // safe.
+  let body: string | undefined;
   if (req.method !== "GET" && req.method !== "HEAD") {
     if (Buffer.isBuffer(req.body)) {
-      // Hand undici a fresh Uint8Array view that doesn't share Buffer's
-      // pooled backing store. Some undici versions hang when given the
-      // raw Express `req.body` Buffer directly.
-      body = new Uint8Array(req.body);
+      body = req.body.toString("utf-8");
     } else if (typeof req.body === "string") {
-      body = new Uint8Array(Buffer.from(req.body, "utf-8"));
+      body = req.body;
     }
   }
-  if (body) {
-    headers["Content-Length"] = String(body.byteLength);
-  }
-
-  // Cancel the upstream request as soon as the client disconnects so we
-  // don't keep streaming (and burning credits) into a closed socket.
-  const abortController = new AbortController();
-  let clientAborted = false;
-  const onClientClose = () => {
-    if (!res.writableEnded) {
-      clientAborted = true;
-      abortController.abort();
-    }
-  };
-  req.on("close", onClientClose);
-  res.on("close", onClientClose);
+  // Note: do NOT set Content-Length manually — undici/fetch sets it from
+  // the body and an explicit one causes the request to hang indefinitely
+  // on this Replit container.
 
   req.log.info(
     {
@@ -157,18 +151,19 @@ router.use(async (req: Request, res: Response) => {
     "modelfarm proxy -> upstream",
   );
 
+  // NOTE: Do NOT pass an AbortSignal sourced from a long-lived
+  // AbortController to fetch on this Replit container — it causes the
+  // outbound request to hang for ~20s before any TCP connection is even
+  // attempted. Cancellation during streaming is handled below by
+  // cancelling the body reader when the client closes.
   let upstream: globalThis.Response;
   try {
     upstream = await fetch(targetUrl, {
       method: req.method,
       headers,
       body,
-      signal: abortController.signal,
     });
   } catch (err) {
-    req.off("close", onClientClose);
-    res.off("close", onClientClose);
-    if (clientAborted) return;
     req.log.error({ err, segment, targetUrl }, "Upstream fetch failed");
     if (!res.headersSent) {
       res.status(502).json({
@@ -188,13 +183,20 @@ router.use(async (req: Request, res: Response) => {
   if (cacheCtrl) res.setHeader("Cache-Control", cacheCtrl);
 
   if (!upstream.body) {
-    req.off("close", onClientClose);
-    res.off("close", onClientClose);
     res.end();
     return;
   }
 
   const reader = upstream.body.getReader();
+  let clientAborted = false;
+  const onClientClose = () => {
+    if (!res.writableEnded) {
+      clientAborted = true;
+      reader.cancel().catch(() => {});
+    }
+  };
+  res.on("close", onClientClose);
+
   res.flushHeaders?.();
   try {
     while (true) {
@@ -203,15 +205,15 @@ router.use(async (req: Request, res: Response) => {
       if (done) break;
       if (value && !res.write(Buffer.from(value))) {
         await new Promise<void>((resolve) => {
-          const done = () => {
-            res.off("drain", done);
-            res.off("close", done);
-            res.off("error", done);
+          const cleanup = () => {
+            res.off("drain", cleanup);
+            res.off("close", cleanup);
+            res.off("error", cleanup);
             resolve();
           };
-          res.once("drain", done);
-          res.once("close", done);
-          res.once("error", done);
+          res.once("drain", cleanup);
+          res.once("close", cleanup);
+          res.once("error", cleanup);
         });
       }
     }
@@ -220,7 +222,6 @@ router.use(async (req: Request, res: Response) => {
       req.log.error({ err, segment }, "Upstream stream error");
     }
   } finally {
-    req.off("close", onClientClose);
     res.off("close", onClientClose);
     try {
       await reader.cancel();
