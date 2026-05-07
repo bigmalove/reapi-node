@@ -221,7 +221,7 @@ AI_INTEGRATIONS_OPENROUTER_API_KEY=<proxy key 或 dummy>
 [ ] curl http://localhost:8080/api/setup-status
 [ ] 看到 4 个 configured: true
 [ ] 打开 http://localhost:8080/
-[ ] 输出html页面访问地址
+[ ] 输出html页面访问地址(真实外网地址比如https://xxx.sisko.replit.dev/，而不是内部地址)
 ```
 
 ## 12. 一句话版本
