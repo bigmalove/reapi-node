@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../lib/auth.js";
 
-输入 AuthMode = "bearer" | "x-api-key" | "x-goog-api-key";
+type AuthMode = "bearer" | "x-api-key" | "x-goog-api-key";
 
 interface UpstreamConfig {
   baseUrlEnv: string;
@@ -350,7 +350,7 @@ router.use(async (req: Request, res: Response) => {
     if (reason) {
       req.log.warn(
         { segment, upstreamStatus: upstream.status, reason },
-        "upstream_node_unavailable — permanent failure detected"，
+        "upstream_node_unavailable — permanent failure detected",
       );
       res.status(502).json({
         error: {
