@@ -70,6 +70,114 @@ const STRIP_HEADERS = new Set([
   "accept-encoding",
 ]);
 
+// ---------------------------------------------------------------------------
+// Upstream permanent-failure detection
+// ---------------------------------------------------------------------------
+
+type DisableReason =
+  | "api-key-not-approved"
+  | "invalid-api-key"
+  | "quota-exhausted"
+  | "billing-disabled"
+  | "account-not-approved";
+
+function detectOpenAiDisableReason(
+  status: number,
+  body: string,
+): DisableReason | null {
+  if (status === 401 && /ApiKey not approved/i.test(body)) {
+    return "api-key-not-approved";
+  }
+  if (status === 401 && /invalid.*api.*key|incorrect.*api.*key/i.test(body)) {
+    return "invalid-api-key";
+  }
+  if (status === 429 && /quota|insufficient_quota|billing/i.test(body)) {
+    return "quota-exhausted";
+  }
+  if (status === 403 && /billing|not approved|account/i.test(body)) {
+    return "billing-disabled";
+  }
+  return null;
+}
+
+function detectAnthropicDisableReason(
+  status: number,
+  body: string,
+): DisableReason | null {
+  if (status === 401 && /invalid.*api.*key|authentication/i.test(body)) {
+    return "invalid-api-key";
+  }
+  if (status === 403 && /billing|credit|not approved|account/i.test(body)) {
+    return "billing-disabled";
+  }
+  if (
+    status === 429 &&
+    /quota|credit|billing|rate limit exceeded your current quota/i.test(body)
+  ) {
+    return "quota-exhausted";
+  }
+  return null;
+}
+
+function detectGoogleDisableReason(
+  status: number,
+  body: string,
+): DisableReason | null {
+  if (status === 401 && /api key not valid|invalid.*api.*key/i.test(body)) {
+    return "invalid-api-key";
+  }
+  if (
+    status === 403 &&
+    /billing|permission denied|not enabled|api key not valid/i.test(body)
+  ) {
+    return "billing-disabled";
+  }
+  if (status === 429 && /quota|resource exhausted/i.test(body)) {
+    return "quota-exhausted";
+  }
+  return null;
+}
+
+function detectOpenRouterDisableReason(
+  status: number,
+  body: string,
+): DisableReason | null {
+  if (status === 401 && /invalid.*key|unauthorized/i.test(body)) {
+    return "invalid-api-key";
+  }
+  if (status === 402 && /credit|payment|balance/i.test(body)) {
+    return "quota-exhausted";
+  }
+  if (status === 403 && /account|disabled|not approved|billing/i.test(body)) {
+    return "billing-disabled";
+  }
+  if (status === 429 && /quota|credit|rate limit/i.test(body)) {
+    return "quota-exhausted";
+  }
+  return null;
+}
+
+function detectDisableReason(
+  segment: string,
+  status: number,
+  body: string,
+): DisableReason | null {
+  switch (segment) {
+    case "openai":
+      return detectOpenAiDisableReason(status, body);
+    case "anthropic":
+      return detectAnthropicDisableReason(status, body);
+    case "google":
+      return detectGoogleDisableReason(status, body);
+    case "openrouter":
+      return detectOpenRouterDisableReason(status, body);
+    default:
+      return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+
 export const SEGMENTS = Object.keys(UPSTREAM);
 
 export interface SegmentStatus {
@@ -234,6 +342,39 @@ router.use(async (req: Request, res: Response) => {
     return;
   }
 
+  // Check for permanent upstream failures before streaming the response.
+  if (!upstream.ok) {
+    const text = await upstream.text();
+    const reason = detectDisableReason(segment, upstream.status, text);
+
+    if (reason) {
+      req.log.warn(
+        { segment, upstreamStatus: upstream.status, reason },
+        "upstream_node_unavailable — permanent failure detected",
+      );
+      res.status(502).json({
+        error: {
+          type: "upstream_node_unavailable",
+          provider: segment,
+          upstreamStatus: upstream.status,
+          reason,
+          retryable: false,
+          disabledCandidate: true,
+          message: "Upstream provider credential or quota is unavailable",
+        },
+      });
+      return;
+    }
+
+    // Not a recognised permanent failure — forward the original error
+    // response verbatim so the caller gets real upstream error details.
+    res
+      .status(upstream.status)
+      .type(upstream.headers.get("content-type") ?? "text/plain")
+      .send(text);
+    return;
+  }
+
   res.status(upstream.status);
 
   // Forward all upstream response headers verbatim so callers see real
@@ -262,7 +403,7 @@ router.use(async (req: Request, res: Response) => {
       if (t) RES_STRIP.add(t);
     }
   }
-  upstream.headers.forEach((value, key) => {
+  upstream。headers.forEach((value, key) => {
     if (RES_STRIP.has(key.toLowerCase())) return;
     res.setHeader(key, value);
   });
