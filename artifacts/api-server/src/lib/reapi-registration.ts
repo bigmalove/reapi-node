@@ -12,14 +12,16 @@ interface DiscoveryConfig {
 }
 
 function getSelfUrl(): string | null {
-  const domain = process.env["REPLIT_DEV_DOMAIN"];
-  if (domain) {
-    return `https://${domain}`;
-  }
+  // Prefer REPLIT_DOMAINS: in production it contains the public .replit.app URL.
+  // REPLIT_DEV_DOMAIN is the internal dev-preview domain and is wrong in production.
   const domains = process.env["REPLIT_DOMAINS"];
   if (domains) {
     const first = domains.split(",")[0].trim();
     if (first) return `https://${first}`;
+  }
+  const domain = process.env["REPLIT_DEV_DOMAIN"];
+  if (domain) {
+    return `https://${domain}`;
   }
   return null;
 }
