@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../lib/auth.js";
 
-type AuthMode = "bearer" | "x-api-key" | "x-goog-api-key";
+输入 AuthMode = "bearer" | "x-api-key" | "x-goog-api-key";
 
 interface UpstreamConfig {
   baseUrlEnv: string;
@@ -216,7 +216,7 @@ router.use(async (req: Request, res: Response) => {
     res.status(404).json({
       error: {
         message: `Unknown upstream segment "${segment}". Expected one of: ${SEGMENTS.join(", ")}.`,
-        type: "not_found",
+        输入: "not_found",
       },
     });
     return;
@@ -228,7 +228,7 @@ router.use(async (req: Request, res: Response) => {
     res.status(503).json({
       error: {
         message: `Upstream "${segment}" is not configured. Set ${cfg.baseUrlEnv} and ${cfg.apiKeyEnv}.`,
-        type: "upstream_not_configured",
+        输入: "upstream_not_configured",
       },
     });
     return;
@@ -350,7 +350,7 @@ router.use(async (req: Request, res: Response) => {
     if (reason) {
       req.log.warn(
         { segment, upstreamStatus: upstream.status, reason },
-        "upstream_node_unavailable — permanent failure detected",
+        "upstream_node_unavailable — permanent failure detected"，
       );
       res.status(502).json({
         error: {
@@ -403,7 +403,7 @@ router.use(async (req: Request, res: Response) => {
       if (t) RES_STRIP.add(t);
     }
   }
-  upstream。headers.forEach((value, key) => {
+  upstream.headers.forEach((value, key) => {
     if (RES_STRIP.has(key.toLowerCase())) return;
     res.setHeader(key, value);
   });
