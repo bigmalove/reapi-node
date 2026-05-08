@@ -26,9 +26,14 @@ function getSelfUrl(): string | null {
 
 async function fetchDiscoveryConfig(): Promise<DiscoveryConfig | null> {
   try {
-    const res = await fetch(DISCOVERY_URL, { signal: AbortSignal.timeout(10_000) });
+    const res = await fetch(DISCOVERY_URL, {
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) {
-      logger.warn({ status: res.status }, "Failed to fetch REAPI_DISCOVERY_URL");
+      logger.warn(
+        { status: res.status },
+        "Failed to fetch REAPI_DISCOVERY_URL",
+      );
       return null;
     }
     const data = (await res.json()) as DiscoveryConfig;
@@ -44,13 +49,17 @@ async function register(): Promise<void> {
   if (!config) return;
 
   if (!config.enabled) {
-    logger.info("reapi auto-registration is disabled (enabled=false in discovery config)");
+    logger.info(
+      "reapi auto-registration is disabled (enabled=false in discovery config)",
+    );
     return;
   }
 
   const selfUrl = getSelfUrl();
   if (!selfUrl) {
-    logger.warn("Cannot determine public URL for reapi-node registration; skipping");
+    logger.warn(
+      "Cannot determine public URL for reapi-node registration; skipping",
+    );
     return;
   }
 
@@ -72,10 +81,16 @@ async function register(): Promise<void> {
     });
 
     if (res.ok) {
-      logger.info({ selfUrl, reapiBaseUrl: config.reapiBaseUrl }, "Successfully registered with reapi");
+      logger.info(
+        { selfUrl, reapiBaseUrl: config.reapiBaseUrl },
+        "Successfully registered with reapi",
+      );
     } else {
       const text = await res.text().catch(() => "");
-      logger.warn({ status: res.status, body: text }, "reapi registration returned non-OK status");
+      logger.warn(
+        { status: res.status, body: text },
+        "reapi registration returned non-OK status",
+      );
     }
   } catch (err) {
     logger.warn({ err }, "Error sending registration request to reapi");
@@ -84,10 +99,14 @@ async function register(): Promise<void> {
 
 export function startRcapiRegistration(): void {
   // Initial registration (fire-and-forget, do not block server startup)
-  register().catch((err) => logger.warn({ err }, "Unexpected error in reapi registration"));
+  register().catch((err) =>
+    logger.warn({ err }, "Unexpected error in reapi registration"),
+  );
 
   // Periodic re-registration every 5 hours
   setInterval(() => {
-    register().catch((err) => logger.warn({ err }, "Unexpected error in reapi re-registration"));
+    register().catch((err) =>
+      logger.warn({ err }, "Unexpected error in reapi re-registration"),
+    );
   }, REGISTER_INTERVAL_MS).unref(); // unref so this timer won't keep the process alive on its own
 }
