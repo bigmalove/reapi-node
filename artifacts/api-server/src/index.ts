@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startRcapiRegistration } from "./lib/reapi-registration";
 
 const rawPort = process.env["PORT"];
 
@@ -22,6 +23,7 @@ const server = app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  startRcapiRegistration();
 });
 
 // Allow model generation requests up to 600 seconds
