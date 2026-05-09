@@ -339,6 +339,63 @@ router.use(async (req: Request, res: Response) => {
     "modelfarm proxy -> upstream",
   );
 
+  // ---------------------------------------------------------------------------
+  // Keep-alive heartbeat to survive Replit's deployment proxy 300 s idle timeout.
+  //
+  // For non-streaming (JSON) requests the server waits silently for the upstream
+  // AI model to finish thinking. If that takes > 300 s the Replit reverse-proxy
+  // cuts the connection before we can send the response.
+  //
+  // Strategy: after a 10 s grace period (fast 4xx/5xx errors always return in
+  // < a second, so they still get the real HTTP status code), begin writing a
+  // newline character every 15 s. Each write resets the proxy's idle timer.
+  // Leading whitespace is harmless — JSON.parse(), all AI SDKs, and fetch()
+  // callers that read .text() all tolerate it.
+  //
+  // Once fetch() returns we clear both timers so normal response handling takes
+  // over. If the heartbeat had already fired we cannot change the HTTP status,
+  // but in practice the upstream will have started returning data long before
+  // 10 s elapses for any successful inference request.
+  // ---------------------------------------------------------------------------
+  const clientWantsSSE =
+    (req.headers["accept"] ?? "").includes("text/event-stream");
+
+  let keepAliveCommitted = false;
+  let keepAliveGraceTimer: ReturnType<typeof setTimeout> | null = null;
+  let keepAlivePingInterval: ReturnType<typeof setInterval> | null = null;
+
+  const stopKeepAlive = () => {
+    if (keepAliveGraceTimer !== null) {
+      clearTimeout(keepAliveGraceTimer);
+      keepAliveGraceTimer = null;
+    }
+    if (keepAlivePingInterval !== null) {
+      clearInterval(keepAlivePingInterval);
+      keepAlivePingInterval = null;
+    }
+  };
+
+  if (!clientWantsSSE) {
+    keepAliveGraceTimer = setTimeout(() => {
+      keepAliveGraceTimer = null;
+      keepAliveCommitted = true;
+      req.log.info({ segment }, "keep-alive: grace period elapsed, sending heartbeat pings");
+      if (!res.headersSent) {
+        res.flushHeaders?.();
+      }
+      if (!res.writableEnded) {
+        res.write("\n");
+      }
+      keepAlivePingInterval = setInterval(() => {
+        if (res.writableEnded) {
+          stopKeepAlive();
+          return;
+        }
+        res.write("\n");
+      }, 15_000);
+    }, 10_000);
+  }
+
   // NOTE: Do NOT pass an AbortSignal sourced from a long-lived
   // AbortController to fetch on this Replit container — it causes the
   // outbound request to hang for ~20s before any TCP connection is even
@@ -352,6 +409,7 @@ router.use(async (req: Request, res: Response) => {
       body,
     });
   } catch (err) {
+    stopKeepAlive();
     req.log.error({ err, segment, targetUrl }, "Upstream fetch failed");
     if (!res.headersSent) {
       res.status(502).json({
@@ -364,6 +422,8 @@ router.use(async (req: Request, res: Response) => {
     return;
   }
 
+  stopKeepAlive();
+
   // Check for permanent upstream failures before streaming the response.
   if (!upstream.ok) {
     const text = await upstream.text();
@@ -374,30 +434,46 @@ router.use(async (req: Request, res: Response) => {
         { segment, upstreamStatus: upstream.status, reason },
         "upstream_node_unavailable — permanent failure detected",
       );
-      res.status(502).json({
-        error: {
-          type: "upstream_node_unavailable",
-          provider: segment,
-          upstreamStatus: upstream.status,
-          reason,
-          retryable: false,
-          disabledCandidate: true,
-          message: "Upstream provider credential or quota is unavailable",
-        },
-      });
+      if (!res.headersSent) {
+        res.status(502).json({
+          error: {
+            type: "upstream_node_unavailable",
+            provider: segment,
+            upstreamStatus: upstream.status,
+            reason,
+            retryable: false,
+            disabledCandidate: true,
+            message: "Upstream provider credential or quota is unavailable",
+          },
+        });
+      } else {
+        // Keep-alive already committed headers; send error as plain body.
+        req.log.warn({ segment, upstreamStatus: upstream.status, reason },
+          "keep-alive committed headers; error body sent without status change");
+        res.end(text);
+      }
       return;
     }
 
     // Not a recognised permanent failure — forward the original error
     // response verbatim so the caller gets real upstream error details.
-    res
-      .status(upstream.status)
-      .type(upstream.headers.get("content-type") ?? "text/plain")
-      .send(text);
+    if (!res.headersSent) {
+      res
+        .status(upstream.status)
+        .type(upstream.headers.get("content-type") ?? "text/plain")
+        .send(text);
+    } else {
+      req.log.warn({ segment, upstreamStatus: upstream.status },
+        "keep-alive committed headers; forwarding error body without status change");
+      res.end(text);
+    }
     return;
   }
 
-  res.status(upstream.status);
+  // Only set status / headers when keep-alive has not yet flushed them.
+  if (!res.headersSent) {
+    res.status(upstream.status);
+  }
 
   // Forward all upstream response headers verbatim so callers see real
   // error bodies, rate-limit hints, request IDs, etc. Strip the full
@@ -425,18 +501,28 @@ router.use(async (req: Request, res: Response) => {
       if (t) RES_STRIP.add(t);
     }
   }
-  upstream.headers.forEach((value, key) => {
-    if (RES_STRIP.has(key.toLowerCase())) return;
-    res.setHeader(key, value);
-  });
+  if (!res.headersSent) {
+    upstream.headers.forEach((value, key) => {
+      if (RES_STRIP.has(key.toLowerCase())) return;
+      res.setHeader(key, value);
+    });
+  }
 
   const isSSE = (upstream.headers.get("content-type") ?? "").includes(
     "text/event-stream",
   );
-  if (isSSE) {
+  if (isSSE && !res.headersSent) {
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
+    // Tell nginx/Replit's reverse proxy NOT to buffer this response so each
+    // SSE chunk is forwarded to the client immediately without batching.
+    // Without this header, nginx buffers the SSE stream and the 300 s proxy
+    // read-timeout fires even though the upstream is still sending data.
+    res.setHeader("X-Accel-Buffering", "no");
     // Disable Nagle so each SSE chunk flushes immediately.
+    req.socket.setNoDelay(true);
+  } else if (isSSE) {
+    res.setHeader("X-Accel-Buffering", "no");
     req.socket.setNoDelay(true);
   }
 
@@ -454,6 +540,19 @@ router.use(async (req: Request, res: Response) => {
     }
   };
   res.on("close", onClientClose);
+
+  // For SSE streams: inject an SSE comment (": keep-alive\n\n") every 15 s
+  // while waiting between upstream chunks. SSE comments are ignored by all
+  // EventSource / SDK clients but each write resets the Replit proxy's idle
+  // read-timeout, preventing the 300 s cut-off during slow model generation.
+  let sseKeepaliveTimer: ReturnType<typeof setInterval> | null = null;
+  if (isSSE) {
+    sseKeepaliveTimer = setInterval(() => {
+      if (!res.writableEnded) {
+        res.write(": keep-alive\n\n");
+      }
+    }, 15_000);
+  }
 
   res.flushHeaders?.();
   try {
@@ -480,6 +579,10 @@ router.use(async (req: Request, res: Response) => {
       req.log.error({ err, segment }, "Upstream stream error");
     }
   } finally {
+    if (sseKeepaliveTimer !== null) {
+      clearInterval(sseKeepaliveTimer);
+      sseKeepaliveTimer = null;
+    }
     res.off("close", onClientClose);
     try {
       await reader.cancel();
