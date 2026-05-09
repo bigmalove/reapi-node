@@ -45,6 +45,23 @@ const UPSTREAM: Record<string, UpstreamConfig> = {
   },
 };
 
+// Fixed x-replit-* identity headers injected into every outgoing request so
+// the upstream sees the call as originating from inside replit.app. Values are
+// read once at startup from Replit's standard environment variables; any header
+// already set by the client takes precedence (client value wins).
+const REPLIT_IDENTITY_HEADERS: Record<string, string> = Object.fromEntries(
+  (
+    [
+      ["x-replit-repl-id",   process.env.REPL_ID        ?? ""],
+      ["x-replit-user-name", process.env.REPL_OWNER     ?? ""],
+      ["x-replit-cluster",   process.env.REPLIT_CLUSTER ?? ""],
+      ["x-forwarded-host",   process.env.REPLIT_DOMAINS
+                               ? process.env.REPLIT_DOMAINS.split(",")[0].trim()
+                               : "replit.app"],
+    ] as [string, string][]
+  ).filter(([, v]) => v !== ""),
+);
+
 // Headers that must NEVER be passed through to upstream — these are either
 // authentication for our proxy (replaced with the real upstream key below),
 // or hop-by-hop / framing headers that fetch/undici will recompute.
@@ -251,10 +268,7 @@ router.use(async (req: Request, res: Response) => {
     if (raw === undefined) continue;
     const lower = name.toLowerCase();
     if (STRIP_HEADERS.has(lower)) continue;
-    // Drop framing / proxy-internal headers we never want to forward.
-    if (lower.startsWith("x-replit-") || lower.startsWith("x-forwarded-")) {
-      continue;
-    }
+
     // Skip Accept: */* — undici hangs in this Replit container when
     // given a wildcard Accept against the local model-farm proxy.
     if (lower === "accept") {
@@ -264,6 +278,14 @@ router.use(async (req: Request, res: Response) => {
     }
     const value = Array.isArray(raw) ? raw.join(", ") : raw;
     if (typeof value === "string") headers[name] = value;
+  }
+
+  // Inject Replit identity headers (client value takes precedence).
+  for (const [name, value] of Object.entries(REPLIT_IDENTITY_HEADERS)) {
+    const alreadySet = Object.keys(headers).some(
+      (h) => h.toLowerCase() === name,
+    );
+    if (!alreadySet) headers[name] = value;
   }
 
   // Inject our real upstream credentials, replacing whatever the client
