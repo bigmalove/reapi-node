@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import apiRouter from "./routes/index.js";
 import modelfarmRouter from "./routes/modelfarm.js";
+import v1Router from "./routes/v1/index.js";
 import { logger } from "./lib/logger.js";
 import { INDEX_HTML } from "./lib/index-html.js";
 
@@ -48,6 +49,9 @@ app.get("/healthz", (_req, res) => {
 });
 
 app.use("/api", apiRouter);
+
+// v1 image / video / model management endpoints
+app.use(v1Router);
 
 // Static landing page (single-file HTML with vanilla JS that calls /api/setup-status).
 app.get("/", (_req, res) => {
