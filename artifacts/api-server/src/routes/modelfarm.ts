@@ -1,9 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../lib/auth.js";
 
-// v0.app Vercel AI Gateway configuration
-// Uses unified endpoint https://api.v0.dev with AI_GATEWAY_API_KEY
-const V0_GATEWAY_BASE_URL = "https://api.v0.dev";
+// Vercel AI Gateway configuration (zero-config in v0.app environment)
+// Uses unified endpoint https://ai-gateway.vercel.sh
+const VERCEL_AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh";
 
 interface UpstreamConfig {
   // Forward headers for provider-specific features
@@ -189,10 +189,10 @@ export interface SegmentStatus {
 }
 
 export function listSegmentStatus(): SegmentStatus[] {
-  const apiKey = process.env["AI_GATEWAY_API_KEY"];
+  // In v0.app environment, AI Gateway is always available (zero-config)
   return SEGMENTS.map((segment) => ({
     segment,
-    configured: !!apiKey,
+    configured: true,
   }));
 }
 
@@ -219,21 +219,10 @@ router.use(async (req: Request, res: Response) => {
     return;
   }
 
-  // v0.app Vercel AI Gateway - unified endpoint for all providers
-  const apiKey = process.env["AI_GATEWAY_API_KEY"];
-  if (!apiKey) {
-    res.status(503).json({
-      error: {
-        message: `AI Gateway is not configured. Set AI_GATEWAY_API_KEY environment variable.`,
-        type: "upstream_not_configured",
-      },
-    });
-    return;
-  }
-
+  // Vercel AI Gateway - unified endpoint for all providers (zero-config in v0.app)
   const qIdx = req.originalUrl.indexOf("?");
   const qs = qIdx >= 0 ? req.originalUrl.slice(qIdx) : "";
-  const targetUrl = `${V0_GATEWAY_BASE_URL}${rest}${qs}`;
+  const targetUrl = `${VERCEL_AI_GATEWAY_BASE_URL}${rest}${qs}`;
 
   const headers: Record<string, string> = {};
 
@@ -268,8 +257,9 @@ router.use(async (req: Request, res: Response) => {
     if (!alreadySet) headers[name] = value;
   }
 
-  // Inject v0 AI Gateway credentials using Bearer auth
-  headers["Authorization"] = `Bearer ${apiKey}`;
+  // Vercel AI Gateway handles authentication internally (zero-config)
+  // Remove any client auth headers as they're not needed
+  delete headers["Authorization"];
   
   // Anthropic requires anthropic-version; default if client omitted.
   if (segment === "anthropic") {

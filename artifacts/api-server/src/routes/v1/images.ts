@@ -5,8 +5,8 @@ import type { ImageGenerationRequest, ImageGenerationResponse } from "../../type
 
 const router = Router();
 
-// v0.app Vercel AI Gateway configuration
-const V0_GATEWAY_BASE_URL = "https://api.v0.dev";
+// Vercel AI Gateway configuration (zero-config in v0.app environment)
+const VERCEL_AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh";
 
 const IMAGE_MODELS = new Set([
   "openai/gpt-5.4-image-2",
@@ -146,11 +146,8 @@ async function callChatForImage(
   model: string,
   body: ImageGenerationRequest,
 ): Promise<{ chatResult: ChatCompletionResult; raw: string }> {
-  const apiKey = process.env["AI_GATEWAY_API_KEY"];
-  if (!apiKey) {
-    throw new Error("AI Gateway is not configured. Set AI_GATEWAY_API_KEY environment variable.");
-  }
-  const url = `${V0_GATEWAY_BASE_URL}/chat/completions`;
+  // Vercel AI Gateway is zero-config in v0.app environment
+  const url = `${VERCEL_AI_GATEWAY_BASE_URL}/chat/completions`;
 
   const chatBody: Record<string, unknown> = {
     model,
@@ -166,8 +163,7 @@ async function callChatForImage(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://replit.com",
+      "HTTP-Referer": "https://v0.app",
       "X-Title": "AI Gateway",
     },
     body: JSON.stringify(chatBody),

@@ -114,12 +114,12 @@ export const INDEX_HTML = `<!doctype html>
           </div>
 
           <div class="card stack">
-            <h3>v0 AI Gateway 配置</h3>
+            <h3>Vercel AI Gateway</h3>
             <div class="row" id="gateway-key-row">
-              <span style="color: var(--muted);">AI_GATEWAY_API_KEY</span>
+              <span style="color: var(--muted);">Vercel AI Gateway</span>
               <span style="color: var(--muted); font-size: 12px;">加载中…</span>
             </div>
-            <p style="font-size: 12px;">需要设置 <code class="kbd">AI_GATEWAY_API_KEY</code> 环境变量来连接 v0.app AI Gateway。</p>
+            <p style="font-size: 12px;">v0.app 环境中 Vercel AI Gateway 为零配置，无需手动设置 API Key。</p>
           </div>
 
           <div class="card stack">
@@ -134,7 +134,7 @@ export const INDEX_HTML = `<!doctype html>
           <div class="card stack">
             <div>
               <h3>上游通道状态</h3>
-              <p style="font-size: 12px; margin-top: 4px;">所有通道都依赖 <code class="kbd">AI_GATEWAY_API_KEY</code> 环境变量。通过 v0.app AI Gateway 统一代理到各提供商。</p>
+              <p style="font-size: 12px; margin-top: 4px;">所有通道通过 Vercel AI Gateway (ai-gateway.vercel.sh) 统一代理到各提供商，零配置即可使用。</p>
             </div>
             <div id="segments-list">
               <div style="color: var(--muted); font-size: 13px;">加载中…</div>
@@ -145,8 +145,9 @@ export const INDEX_HTML = `<!doctype html>
             <h3>关于本节点</h3>
             <ul class="bullet">
               <li>• 角色：反向代理池中的一个上游成员节点</li>
-              <li>• 后端：v0.app Vercel AI Gateway (https://api.v0.dev)</li>
+              <li>• 后端：Vercel AI Gateway (ai-gateway.vercel.sh)</li>
               <li>• 支持的提供商：OpenAI、Anthropic、Google Gemini 等</li>
+              <li>• 零配置：v0.app 环境自动连接，无需 API Key</li>
               <li>• 支持 SSE 流式响应；请求/响应字节按原样转发</li>
             </ul>
           </div>
@@ -174,10 +175,10 @@ x-api-key: &lt;PROXY_API_KEY&gt;</pre>
             <table>
               <thead><tr><th>外部路径</th><th>转发到</th><th>说明</th></tr></thead>
               <tbody>
-                <tr><td class="mono" style="font-size: 12px;">/modelfarm/openai/*</td><td class="mono" style="font-size: 11px; color: var(--muted);">api.v0.dev/*</td><td style="font-size: 12px; color: var(--muted);">OpenAI 兼容接口</td></tr>
-                <tr><td class="mono" style="font-size: 12px;">/modelfarm/anthropic/*</td><td class="mono" style="font-size: 11px; color: var(--muted);">api.v0.dev/*</td><td style="font-size: 12px; color: var(--muted);">Anthropic 接口</td></tr>
-                <tr><td class="mono" style="font-size: 12px;">/modelfarm/google/*</td><td class="mono" style="font-size: 11px; color: var(--muted);">api.v0.dev/*</td><td style="font-size: 12px; color: var(--muted);">Google Gemini 接口</td></tr>
-                <tr><td class="mono" style="font-size: 12px;">/modelfarm/openrouter/*</td><td class="mono" style="font-size: 11px; color: var(--muted);">api.v0.dev/*</td><td style="font-size: 12px; color: var(--muted);">OpenRouter 兼容接口</td></tr>
+                <tr><td class="mono" style="font-size: 12px;">/modelfarm/openai/*</td><td class="mono" style="font-size: 11px; color: var(--muted);">ai-gateway.vercel.sh/*</td><td style="font-size: 12px; color: var(--muted);">OpenAI 兼容接口</td></tr>
+                <tr><td class="mono" style="font-size: 12px;">/modelfarm/anthropic/*</td><td class="mono" style="font-size: 11px; color: var(--muted);">ai-gateway.vercel.sh/*</td><td style="font-size: 12px; color: var(--muted);">Anthropic 接口</td></tr>
+                <tr><td class="mono" style="font-size: 12px;">/modelfarm/google/*</td><td class="mono" style="font-size: 11px; color: var(--muted);">ai-gateway.vercel.sh/*</td><td style="font-size: 12px; color: var(--muted);">Google Gemini 接口</td></tr>
+                <tr><td class="mono" style="font-size: 12px;">/modelfarm/openrouter/*</td><td class="mono" style="font-size: 11px; color: var(--muted);">ai-gateway.vercel.sh/*</td><td style="font-size: 12px; color: var(--muted);">OpenRouter 兼容接口</td></tr>
               </tbody>
             </table>
             <p style="font-size: 12px;">请求方法、查询字符串、请求体（原始字节）与流式响应均按原样转发。</p>
@@ -220,11 +221,11 @@ API Key: &lt;本节点的 PROXY_API_KEY，留空则不认证&gt;</pre>
             <table>
               <thead><tr><th>变量名</th><th>必填</th><th>说明</th></tr></thead>
               <tbody>
-                <tr><td class="mono" style="font-size: 12px;">AI_GATEWAY_API_KEY</td><td style="font-size: 12px; color: var(--green);">是</td><td style="font-size: 12px; color: var(--muted);">v0.app AI Gateway 的 API Key</td></tr>
                 <tr><td class="mono" style="font-size: 12px;">PROXY_API_KEY</td><td style="font-size: 12px; color: var(--muted);">否</td><td style="font-size: 12px; color: var(--muted);">客户端访问本节点的认证密钥</td></tr>
                 <tr><td class="mono" style="font-size: 12px;">PORT</td><td style="font-size: 12px; color: var(--green);">是</td><td style="font-size: 12px; color: var(--muted);">服务监听端口</td></tr>
               </tbody>
             </table>
+            <p style="font-size: 12px; margin-top: 8px;">Vercel AI Gateway 在 v0.app 环境中为零配置，无需设置 API Key。</p>
           </section>
         </div>
       </div>
@@ -285,14 +286,14 @@ API Key: &lt;本节点的 PROXY_API_KEY，留空则不认证&gt;</pre>
     fetch("/api/setup-status")
       .then((r) => r.ok ? r.json() : r.text().then((t) => Promise.reject(new Error(t))))
       .then((status) => {
-        // Gateway key row
+        // Gateway status row
         const gatewayRow = document.getElementById("gateway-key-row");
         gatewayRow.innerHTML = "";
         const gatewayLabel = document.createElement("span");
         gatewayLabel.style.color = "var(--muted)";
-        gatewayLabel.textContent = "AI_GATEWAY_API_KEY";
+        gatewayLabel.textContent = "Vercel AI Gateway";
         gatewayRow.appendChild(gatewayLabel);
-        gatewayRow.appendChild(pill(!!status.aiGatewayConfigured, "已配置", "未设置"));
+        gatewayRow.appendChild(pill(true, "零配置可用", "未连接"));
 
         // Proxy key row
         const row = document.getElementById("proxy-key-row");
@@ -321,11 +322,11 @@ API Key: &lt;本节点的 PROXY_API_KEY，留空则不认证&gt;</pre>
           name.appendChild(nameText);
           name.appendChild(tag);
           head.appendChild(name);
-          head.appendChild(pill(!!s.configured, "可用", "需要配置 AI_GATEWAY_API_KEY"));
+          head.appendChild(pill(!!s.configured, "可用", "未配置"));
           seg.appendChild(head);
           const env = document.createElement("div");
           env.className = "seg-env mono";
-          env.textContent = "通过 v0.app AI Gateway (api.v0.dev) 代理";
+          env.textContent = "通过 Vercel AI Gateway (ai-gateway.vercel.sh) 代理";
           seg.appendChild(env);
           list.appendChild(seg);
         }
