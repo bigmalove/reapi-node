@@ -1,40 +1,26 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../lib/auth.js";
 
-type AuthMode = "bearer" | "x-api-key" | "x-goog-api-key";
+// v0.app Vercel AI Gateway configuration
+// Uses unified endpoint https://api.v0.dev with AI_GATEWAY_API_KEY
+const V0_GATEWAY_BASE_URL = "https://api.v0.dev";
 
 interface UpstreamConfig {
-  baseUrlEnv: string;
-  apiKeyEnv: string;
-  authMode: AuthMode;
-  // Lower-cased client header names that should be forwarded verbatim to
-  // the real upstream (in addition to the always-forwarded set below).
+  // Forward headers for provider-specific features
   forwardHeaders: readonly string[];
 }
 
 const UPSTREAM: Record<string, UpstreamConfig> = {
   openai: {
-    baseUrlEnv: "AI_INTEGRATIONS_OPENAI_BASE_URL",
-    apiKeyEnv: "AI_INTEGRATIONS_OPENAI_API_KEY",
-    authMode: "bearer",
     forwardHeaders: ["openai-beta", "openai-organization", "openai-project"],
   },
   anthropic: {
-    baseUrlEnv: "AI_INTEGRATIONS_ANTHROPIC_BASE_URL",
-    apiKeyEnv: "AI_INTEGRATIONS_ANTHROPIC_API_KEY",
-    authMode: "x-api-key",
     forwardHeaders: ["anthropic-beta", "anthropic-version"],
   },
   google: {
-    baseUrlEnv: "AI_INTEGRATIONS_GEMINI_BASE_URL",
-    apiKeyEnv: "AI_INTEGRATIONS_GEMINI_API_KEY",
-    authMode: "x-goog-api-key",
     forwardHeaders: ["x-goog-api-client"],
   },
   openrouter: {
-    baseUrlEnv: "AI_INTEGRATIONS_OPENROUTER_BASE_URL",
-    apiKeyEnv: "AI_INTEGRATIONS_OPENROUTER_API_KEY",
-    authMode: "bearer",
     forwardHeaders: [
       "openai-beta",
       "openai-organization",
@@ -200,20 +186,14 @@ export const SEGMENTS = Object.keys(UPSTREAM);
 export interface SegmentStatus {
   segment: string;
   configured: boolean;
-  baseUrlEnv: string;
-  apiKeyEnv: string;
 }
 
 export function listSegmentStatus(): SegmentStatus[] {
-  return SEGMENTS.map((segment) => {
-    const cfg = UPSTREAM[segment]!;
-    return {
-      segment,
-      configured: !!process.env[cfg.baseUrlEnv] && !!process.env[cfg.apiKeyEnv],
-      baseUrlEnv: cfg.baseUrlEnv,
-      apiKeyEnv: cfg.apiKeyEnv,
-    };
-  });
+  const apiKey = process.env["AI_GATEWAY_API_KEY"];
+  return SEGMENTS.map((segment) => ({
+    segment,
+    configured: !!apiKey,
+  }));
 }
 
 const router: IRouter = Router();
@@ -239,13 +219,13 @@ router.use(async (req: Request, res: Response) => {
     return;
   }
 
-  const baseUrl = process.env[cfg.baseUrlEnv];
-  const apiKey = process.env[cfg.apiKeyEnv];
-  if (!baseUrl || !apiKey) {
+  // v0.app Vercel AI Gateway - unified endpoint for all providers
+  const apiKey = process.env["AI_GATEWAY_API_KEY"];
+  if (!apiKey) {
     res.status(503).json({
       error: {
-        message: `Upstream "${segment}" is not configured. Set ${cfg.baseUrlEnv} and ${cfg.apiKeyEnv}.`,
-        输入: "upstream_not_configured",
+        message: `AI Gateway is not configured. Set AI_GATEWAY_API_KEY environment variable.`,
+        type: "upstream_not_configured",
       },
     });
     return;
@@ -253,7 +233,7 @@ router.use(async (req: Request, res: Response) => {
 
   const qIdx = req.originalUrl.indexOf("?");
   const qs = qIdx >= 0 ? req.originalUrl.slice(qIdx) : "";
-  const targetUrl = `${baseUrl.replace(/\/+$/, "")}${rest}${qs}`;
+  const targetUrl = `${V0_GATEWAY_BASE_URL}${rest}${qs}`;
 
   const headers: Record<string, string> = {};
 
@@ -288,24 +268,15 @@ router.use(async (req: Request, res: Response) => {
     if (!alreadySet) headers[name] = value;
   }
 
-  // Inject our real upstream credentials, replacing whatever the client
-  // sent for proxy auth.
-  switch (cfg.authMode) {
-    case "bearer":
-      headers["Authorization"] = `Bearer ${apiKey}`;
-      break;
-    case "x-api-key": {
-      headers["x-api-key"] = apiKey;
-      // Anthropic requires anthropic-version; default if client omitted.
-      const hasVersion = Object.keys(headers).some(
-        (h) => h.toLowerCase() === "anthropic-version",
-      );
-      if (!hasVersion) headers["anthropic-version"] = "2023-06-01";
-      break;
-    }
-    case "x-goog-api-key":
-      headers["x-goog-api-key"] = apiKey;
-      break;
+  // Inject v0 AI Gateway credentials using Bearer auth
+  headers["Authorization"] = `Bearer ${apiKey}`;
+  
+  // Anthropic requires anthropic-version; default if client omitted.
+  if (segment === "anthropic") {
+    const hasVersion = Object.keys(headers).some(
+      (h) => h.toLowerCase() === "anthropic-version",
+    );
+    if (!hasVersion) headers["anthropic-version"] = "2023-06-01";
   }
 
   res.setTimeout(600_000);

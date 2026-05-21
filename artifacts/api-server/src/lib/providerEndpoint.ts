@@ -5,21 +5,16 @@ export interface ProviderEndpoint {
   apiKey: string;
 }
 
-const ENV_BY_PROVIDER: Record<ProviderName, { baseUrl: string; apiKey: string }> = {
-  openai:     { baseUrl: "AI_INTEGRATIONS_OPENAI_BASE_URL",     apiKey: "AI_INTEGRATIONS_OPENAI_API_KEY" },
-  anthropic:  { baseUrl: "AI_INTEGRATIONS_ANTHROPIC_BASE_URL",  apiKey: "AI_INTEGRATIONS_ANTHROPIC_API_KEY" },
-  gemini:     { baseUrl: "AI_INTEGRATIONS_GEMINI_BASE_URL",     apiKey: "AI_INTEGRATIONS_GEMINI_API_KEY" },
-  openrouter: { baseUrl: "AI_INTEGRATIONS_OPENROUTER_BASE_URL", apiKey: "AI_INTEGRATIONS_OPENROUTER_API_KEY" },
-};
+// v0.app Vercel AI Gateway configuration
+// Uses unified endpoint https://api.v0.dev with AI_GATEWAY_API_KEY
+const V0_GATEWAY_BASE_URL = "https://api.v0.dev";
 
 export function resolveProviderEndpoint(provider: ProviderName): ProviderEndpoint {
-  const envKeys = ENV_BY_PROVIDER[provider];
-  const baseUrl = process.env[envKeys.baseUrl];
-  const apiKey = process.env[envKeys.apiKey];
-  if (!baseUrl || !apiKey) {
+  const apiKey = process.env["AI_GATEWAY_API_KEY"];
+  if (!apiKey) {
     throw new Error(
-      `Provider "${provider}" is not configured. Set ${envKeys.baseUrl} and ${envKeys.apiKey}.`,
+      `AI Gateway is not configured. Set AI_GATEWAY_API_KEY environment variable.`,
     );
   }
-  return { baseUrl, apiKey };
+  return { baseUrl: V0_GATEWAY_BASE_URL, apiKey };
 }

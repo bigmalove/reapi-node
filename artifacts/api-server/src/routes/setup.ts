@@ -11,6 +11,7 @@ router.get("/setup-status", (_req, res) => {
   res.json({
     role: "upstream-pool-node",
     proxyKey: !!process.env["PROXY_API_KEY"],
+    aiGatewayConfigured: !!process.env["AI_GATEWAY_API_KEY"],
     providers,
     segments,
   });

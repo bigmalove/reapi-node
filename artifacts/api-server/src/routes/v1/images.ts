@@ -1,10 +1,12 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../../lib/auth.js";
 import { isModelDisabled } from "../../lib/models.js";
-import { resolveProviderEndpoint } from "../../lib/providerEndpoint.js";
 import type { ImageGenerationRequest, ImageGenerationResponse } from "../../types.js";
 
 const router = Router();
+
+// v0.app Vercel AI Gateway configuration
+const V0_GATEWAY_BASE_URL = "https://api.v0.dev";
 
 const IMAGE_MODELS = new Set([
   "openai/gpt-5.4-image-2",
@@ -144,8 +146,11 @@ async function callChatForImage(
   model: string,
   body: ImageGenerationRequest,
 ): Promise<{ chatResult: ChatCompletionResult; raw: string }> {
-  const { baseUrl, apiKey } = resolveProviderEndpoint("openrouter");
-  const url = `${baseUrl}/chat/completions`;
+  const apiKey = process.env["AI_GATEWAY_API_KEY"];
+  if (!apiKey) {
+    throw new Error("AI Gateway is not configured. Set AI_GATEWAY_API_KEY environment variable.");
+  }
+  const url = `${V0_GATEWAY_BASE_URL}/chat/completions`;
 
   const chatBody: Record<string, unknown> = {
     model,
