@@ -5,12 +5,11 @@ export interface ProviderEndpoint {
   apiKey: string;
 }
 
-// Vercel AI Gateway configuration (zero-config in v0.app environment)
-// Uses unified endpoint https://ai-gateway.vercel.sh
-const VERCEL_AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh";
+// v0.app AI Gateway configuration
+// Uses unified endpoint https://api.v0.dev
+const V0_GATEWAY_BASE_URL = "https://api.v0.dev";
 
 export function resolveProviderEndpoint(_provider: ProviderName): ProviderEndpoint {
-  // In v0.app environment, the AI Gateway works zero-config
-  // No API key needed for supported providers (OpenAI, Anthropic, Google, etc.)
-  return { baseUrl: VERCEL_AI_GATEWAY_BASE_URL, apiKey: "" };
+  const apiKey = process.env["V0_API_KEY"] || process.env["AI_GATEWAY_API_KEY"] || "";
+  return { baseUrl: V0_GATEWAY_BASE_URL, apiKey };
 }

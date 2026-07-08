@@ -1,9 +1,13 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../lib/auth.js";
 
-// Vercel AI Gateway configuration (zero-config in v0.app environment)
-// Uses unified endpoint https://ai-gateway.vercel.sh
-const VERCEL_AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh";
+// v0.app AI Gateway configuration
+// Uses unified endpoint https://api.v0.dev
+const V0_GATEWAY_BASE_URL = "https://api.v0.dev";
+
+// API key for the v0.app AI Gateway (read once at startup).
+const V0_GATEWAY_API_KEY =
+  process.env["V0_API_KEY"] || process.env["AI_GATEWAY_API_KEY"] || "";
 
 interface UpstreamConfig {
   // Forward headers for provider-specific features
@@ -189,10 +193,12 @@ export interface SegmentStatus {
 }
 
 export function listSegmentStatus(): SegmentStatus[] {
-  // In v0.app environment, AI Gateway is always available (zero-config)
+  // All segments route through the v0.app AI Gateway; availability depends
+  // on the gateway API key being configured.
+  const configured = !!V0_GATEWAY_API_KEY;
   return SEGMENTS.map((segment) => ({
     segment,
-    configured: true,
+    configured,
   }));
 }
 
@@ -219,10 +225,10 @@ router.use(async (req: Request, res: Response) => {
     return;
   }
 
-  // Vercel AI Gateway - unified endpoint for all providers (zero-config in v0.app)
+  // v0.app AI Gateway - unified endpoint for all providers
   const qIdx = req.originalUrl.indexOf("?");
   const qs = qIdx >= 0 ? req.originalUrl.slice(qIdx) : "";
-  const targetUrl = `${VERCEL_AI_GATEWAY_BASE_URL}${rest}${qs}`;
+  const targetUrl = `${V0_GATEWAY_BASE_URL}${rest}${qs}`;
 
   const headers: Record<string, string> = {};
 
@@ -257,10 +263,12 @@ router.use(async (req: Request, res: Response) => {
     if (!alreadySet) headers[name] = value;
   }
 
-  // Vercel AI Gateway handles authentication internally (zero-config)
-  // Remove any client auth headers as they're not needed
-  delete headers["Authorization"];
-  
+  // Inject the v0.app AI Gateway credentials, replacing whatever the client
+  // sent for proxy auth. All providers use Bearer auth against api.v0.dev.
+  if (V0_GATEWAY_API_KEY) {
+    headers["Authorization"] = `Bearer ${V0_GATEWAY_API_KEY}`;
+  }
+
   // Anthropic requires anthropic-version; default if client omitted.
   if (segment === "anthropic") {
     const hasVersion = Object.keys(headers).some(

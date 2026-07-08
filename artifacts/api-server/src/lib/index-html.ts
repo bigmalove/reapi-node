@@ -114,12 +114,12 @@ export const INDEX_HTML = `<!doctype html>
           </div>
 
           <div class="card stack">
-            <h3>Vercel AI Gateway</h3>
+            <h3>v0.app AI Gateway</h3>
             <div class="row" id="gateway-key-row">
-              <span style="color: var(--muted);">Vercel AI Gateway</span>
+              <span style="color: var(--muted);">v0.app AI Gateway</span>
               <span style="color: var(--muted); font-size: 12px;">加载中…</span>
             </div>
-            <p style="font-size: 12px;">v0.app 环境中 Vercel AI Gateway 为零配置，无需手动设置 API Key。</p>
+            <p style="font-size: 12px;">通过 <code class="kbd">api.v0.dev</code> 统一代理各提供商，需设置 <code class="kbd">V0_API_KEY</code> 环境变量。</p>
           </div>
 
           <div class="card stack">
@@ -128,7 +128,7 @@ export const INDEX_HTML = `<!doctype html>
               <span style="color: var(--muted);">PROXY_API_KEY</span>
               <span style="color: var(--muted); font-size: 12px;">加载中…</span>
             </div>
-            <p style="font-size: 12px;">若设置了环境变量 <code class="kbd">PROXY_API_KEY</code>，所有 <code class="kbd">/modelfarm/*</code> 请求都需通过 <code class="kbd">Authorization: Bearer …</code> 或 <code class="kbd">x-api-key: …</code> 携带该密钥；未设置时则节点开放访问。</p>
+            <p style="font-size: 12px;">若设置了环境变量 <code class="kbd">PROXY_API_KEY</code>，所有 <code class="kbd">/modelfarm/*</code> 请求都需通过 <code class="kbd">Authorization: Bearer …</code> 或 <code class="kbd">x-api-key: …</code> 携带该密钥���未设置时则节点开放访问。</p>
           </div>
 
           <div class="card stack">
